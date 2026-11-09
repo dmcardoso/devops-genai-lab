@@ -10,7 +10,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -62,12 +62,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Capture unit test failure log
+      - name: Run unit tests (pytest)
         continue-on-error: true
         run: |
-          echo "Rodando testes unitários para captura de log..."
-          pytest test_app.py 2>&1 | tee /tmp/pytest_output.log
-          exit ${PIPESTATUS[0]}
+          echo "Rodando testes unitários..."
+          pytest test_app.py
 
       - name: Sign in to OpenCode
         env:
@@ -87,14 +86,14 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_PERMISSION: '{"edit":"deny","write":"deny","bash":"allow"}'
         with:
           model: opencode-go/claude-haiku-5-5
-          agent: plan
           use_github_token: true
           prompt: |
             Você é um Engenheiro DevOps Sênior especialista em Python.
-            Analise o código do repositório (`app.py` e `test_app.py`) e o log de erro dos testes unitários salvo em `/tmp/pytest_output.log`.
-            NÃO altere nenhum arquivo do repositório; apenas escreva o diagnóstico completo na resposta:
-            1. Identifique a causa raiz da falha nos testes.
-            2. Sugira a correção exata do código com um bloco de código de exemplo.
-            3. Seja breve, técnico e didático, respondendo em português.
+            Analise os arquivos `app.py` e `test_app.py` neste repositório (e execute `pytest test_app.py` se necessário).
+            NÃO edite nenhum arquivo. Responda diretamente em português com um diagnóstico completo:
+            1. Identifique a causa raiz da falha nos testes unitários.
+            2. Mostre a sugestão exata de correção do código em `app.py`.
+            3. Seja breve, técnico e didático.
