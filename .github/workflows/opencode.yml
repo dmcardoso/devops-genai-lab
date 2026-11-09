@@ -87,7 +87,6 @@ jobs:
       - name: Run OpenCode Review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_EVENT_NAME: pull_request
           MODEL: opencode-go/claude-haiku-5-5
           USE_GITHUB_TOKEN: "true"
           OPENCODE_PERMISSION: '{"edit":"deny","write":"deny","bash":"allow"}'
@@ -99,4 +98,4 @@ jobs:
             1. Identifique a causa raiz da falha nos testes unitários.
             2. Mostre a sugestão exata de correção do código em `app.py`.
             3. Seja breve, técnico e didático.
-        run: ~/.opencode/bin/opencode github run
+        run: GITHUB_EVENT_NAME=pull_request ~/.opencode/bin/opencode github run
