@@ -1,12 +1,8 @@
 name: OpenCode CI & Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
 
 permissions:
   id-token: write
@@ -16,12 +12,13 @@ permissions:
 
 jobs:
   unit_test:
-    if: github.event_name == 'pull_request'
+    name: Unit Tests (pytest)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - name: Checkout repository
+      - name: Checkout PR branch
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -32,15 +29,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run unit tests (pytest)
+      - name: Run unit tests (intentional failure)
         run: |
           echo "Rodando testes unitários..."
           pytest test_app.py
 
-  opencode:
-    if: |
-      contains(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, '/opencode')
+  ai_debugger:
+    name: OpenCode AI Debugger
+    needs: [unit_test]
+    if: always() && needs.unit_test.result == 'failure'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -61,12 +58,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Run unit tests (pytest)
-        continue-on-error: true
-        run: |
-          echo "Rodando testes unitários..."
-          pytest test_app.py
 
       - name: Sign in to OpenCode
         env:
@@ -96,12 +87,14 @@ jobs:
       - name: Run OpenCode Review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_NAME: pull_request
           MODEL: opencode-go/claude-haiku-5-5
           USE_GITHUB_TOKEN: "true"
           OPENCODE_PERMISSION: '{"edit":"deny","write":"deny","bash":"allow"}'
           PROMPT: |
             Você é um Engenheiro DevOps Sênior especialista em Python.
-            Analise os arquivos `app.py` e `test_app.py` neste repositório (e execute `pytest test_app.py` se necessário).
+            O job `unit_test` falhou ao executar `pytest test_app.py` nesta Pull Request.
+            Execute `pytest test_app.py` ou analise os arquivos `app.py` e `test_app.py` neste repositório.
             NÃO edite nenhum arquivo. Responda diretamente em português com um diagnóstico completo:
             1. Identifique a causa raiz da falha nos testes unitários.
             2. Mostre a sugestão exata de correção do código em `app.py`.
