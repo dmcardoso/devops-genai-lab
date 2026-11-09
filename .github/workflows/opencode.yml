@@ -1,6 +1,8 @@
 name: OpenCode CI & Review
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -13,7 +15,29 @@ permissions:
   issues: write
 
 jobs:
-  review:
+  unit_test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests (pytest)
+        run: |
+          echo "Rodando testes unitários..."
+          pytest test_app.py
+
+  opencode:
     if: |
       contains(github.event.comment.body, '/oc') ||
       contains(github.event.comment.body, '/opencode')
@@ -38,11 +62,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run unit tests
-        id: unit_test
+      - name: Capture unit test failure log
         continue-on-error: true
         run: |
-          echo "Rodando testes unitários..."
+          echo "Rodando testes unitários para captura de log..."
           pytest test_app.py 2>&1 | tee /tmp/pytest_output.log
           exit ${PIPESTATUS[0]}
 
