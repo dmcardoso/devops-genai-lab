@@ -1,3 +1,4 @@
+# Pipeline de CI/CD e Diagnóstico com IA Generativa (OpenCode)
 name: OpenCode CI & Review
 
 on:
