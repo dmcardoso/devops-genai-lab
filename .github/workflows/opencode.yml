@@ -50,11 +50,18 @@ jobs:
         run: |
           oidc=$(curl -sSf --oauth2-bearer "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
-          token=$(curl -sSf https://opencode.ai/console/auth/oauth/token \
+          echo "OIDC claims:"
+          echo "$oidc" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{iss, sub, aud, ref, repository, event_name, workflow_ref, job_workflow_ref}' || true
+          resp=$(curl -sS https://opencode.ai/console/auth/oauth/token \
             -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
             -d subject_token_type=urn:ietf:params:oauth:token-type:jwt \
             -d client_id=sk_af7c6e65-a88d-46ca-ba7d-74da0bbcc82f \
-            -d subject_token="$oidc" | jq -r .access_token)
+            -d subject_token="$oidc")
+          token=$(echo "$resp" | jq -r '.access_token // empty')
+          if [ -z "$token" ]; then
+            echo "OAuth token exchange failed: $resp"
+            exit 1
+          fi
           echo "::add-mask::$token"
           echo "OPENCODE_API_KEY=$token" >> "$GITHUB_ENV"
 
