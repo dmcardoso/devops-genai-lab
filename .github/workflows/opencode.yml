@@ -1,8 +1,6 @@
 name: OpenCode CI & Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -17,7 +15,6 @@ permissions:
 jobs:
   review:
     if: |
-      github.event_name == 'pull_request' ||
       contains(github.event.comment.body, '/oc') ||
       contains(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
@@ -26,6 +23,11 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Configure Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -41,7 +43,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "Rodando testes unitários..."
-          pytest test_app.py 2>&1 | tee pytest_output.log
+          pytest test_app.py 2>&1 | tee /tmp/pytest_output.log
           exit ${PIPESTATUS[0]}
 
       - name: Sign in to OpenCode
@@ -50,18 +52,11 @@ jobs:
         run: |
           oidc=$(curl -sSf --oauth2-bearer "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
-          echo "OIDC claims:"
-          echo "$oidc" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{iss, sub, aud, ref, repository, event_name, workflow_ref, job_workflow_ref}' || true
-          resp=$(curl -sS https://opencode.ai/console/auth/oauth/token \
+          token=$(curl -sSf https://opencode.ai/console/auth/oauth/token \
             -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
             -d subject_token_type=urn:ietf:params:oauth:token-type:jwt \
             -d client_id=sk_af7c6e65-a88d-46ca-ba7d-74da0bbcc82f \
-            -d subject_token="$oidc")
-          token=$(echo "$resp" | jq -r '.access_token // empty')
-          if [ -z "$token" ]; then
-            echo "OAuth token exchange failed: $resp"
-            exit 1
-          fi
+            -d subject_token="$oidc" | jq -r .access_token)
           echo "::add-mask::$token"
           echo "OPENCODE_API_KEY=$token" >> "$GITHUB_ENV"
 
@@ -71,10 +66,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: opencode-go/claude-haiku-5-5
+          agent: plan
           use_github_token: true
           prompt: |
             Você é um Engenheiro DevOps Sênior especialista em Python.
-            Revise esta Pull Request e analise o log de erro dos testes unitários salvo em `pytest_output.log` (ou execute `pytest test_app.py`).
-            1. Identifique a causa raiz da falha nos testes (`app.py` e `test_app.py`).
-            2. Sugira a correção exata do código com um exemplo claro.
+            Analise o código do repositório (`app.py` e `test_app.py`) e o log de erro dos testes unitários salvo em `/tmp/pytest_output.log`.
+            NÃO altere nenhum arquivo do repositório; apenas escreva o diagnóstico completo na resposta:
+            1. Identifique a causa raiz da falha nos testes.
+            2. Sugira a correção exata do código com um bloco de código de exemplo.
             3. Seja breve, técnico e didático, respondendo em português.
